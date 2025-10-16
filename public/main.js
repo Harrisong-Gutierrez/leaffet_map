@@ -177,7 +177,7 @@ function showAutoSaveNotification(message) {
   notification.style.left = '50%';
   notification.style.transform = 'translateX(-50%)';
   notification.style.backgroundColor = '#4CAF50';
-  notification.style.color: 'white';
+  notification.style.color = 'white';
   notification.style.padding = '8px 16px';
   notification.style.borderRadius = '4px';
   notification.style.zIndex = '1000';
