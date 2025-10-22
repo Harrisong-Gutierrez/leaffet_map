@@ -265,6 +265,30 @@ function initializeMap() {
     attribution: "&copy; OpenStreetMap",
   }).addTo(map);
 
+  // === Load GeoJSON Layer (Districts, Barrios, etc.) ===
+fetch("http://localhost:3000/barrios_managua.geojson")
+  .then((response) => response.json())
+  .then((geojsonData) => {
+    const districtLayer = L.geoJSON(geojsonData, {
+      style: {
+        color: "#3388ff",
+        weight: 2,
+        fillColor: "#3388ff",
+        fillOpacity: 0.1,
+      },
+      onEachFeature: function (feature, layer) {
+        if (feature.properties && feature.properties.name) {
+          layer.bindPopup(`<strong>${feature.properties.name}</strong>`);
+        }
+      },
+    }).addTo(map);
+
+    // Fit the map to the district boundaries
+    map.fitBounds(districtLayer.getBounds());
+  })
+  .catch((error) => console.error("Error loading GeoJSON:", error));
+
+
   drawnItems = new L.FeatureGroup();
   map.addLayer(drawnItems);
 
@@ -342,6 +366,6 @@ function initializeMap() {
     saveToServer();
   });
 
-  loadFromServer();
+  // loadFromServer();
   map.invalidateSize();
 }
