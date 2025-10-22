@@ -7,6 +7,10 @@ let drawnItems;
 let drawControl;
 const API_URL = "http://localhost:3001";
 
+function generateUUID() {
+  return uuid.v4();
+}
+
 const colorPalette = [
   "#97009c",
   "#FF0000",
@@ -145,31 +149,51 @@ window.saveToServer = async function () {
   drawnItems.eachLayer(function (layer) {
     if (layer instanceof L.Polygon) {
       polygons.push({
+        id: layer.properties?.id || generateUUID(),
         name: layer.properties?.name || "Polygon " + layer._leaflet_id,
         coordinates: layer
           .getLatLngs()[0]
           .map((latlng) => [latlng.lat, latlng.lng]),
-        color: layer.options.fillColor || colorPalette[currentColorIndex],
+        color:
+          layer.properties?.color ||
+          layer.options.fillColor ||
+          colorPalette[currentColorIndex],
       });
     }
   });
 
   try {
-    const existing = await fetch(`${API_URL}/polygons`).then((r) => r.json());
+    const existingPolygons = await fetch(`${API_URL}/polygons`).then((r) =>
+      r.json()
+    );
+
+    const polygonsToDelete = existingPolygons.filter(
+      (serverPolygon) =>
+        !polygons.some((localPolygon) => localPolygon.id === serverPolygon.id)
+    );
+
     await Promise.all(
-      existing.map((d) =>
-        fetch(`${API_URL}/polygons/${d.id}`, { method: "DELETE" })
+      polygonsToDelete.map((polygon) =>
+        fetch(`${API_URL}/polygons/${polygon.id}`, { method: "DELETE" })
       )
     );
 
     await Promise.all(
-      polygons.map((polygon) =>
-        fetch(`${API_URL}/polygons`, {
-          method: "POST",
+      polygons.map((polygon) => {
+        const method = existingPolygons.some((ep) => ep.id === polygon.id)
+          ? "PUT"
+          : "POST";
+        const url =
+          method === "PUT"
+            ? `${API_URL}/polygons/${polygon.id}`
+            : `${API_URL}/polygons`;
+
+        return fetch(url, {
+          method: method,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(polygon),
-        })
-      )
+        });
+      })
     );
 
     console.log("Data saved to server");
@@ -182,22 +206,34 @@ window.loadFromServer = async function () {
   try {
     const polygons = await fetch(`${API_URL}/polygons`).then((r) => r.json());
 
-    drawnItems.clearLayers();
+    const existingIds = [];
+    drawnItems.eachLayer((layer) => {
+      if (layer.properties?.id) {
+        existingIds.push(layer.properties.id);
+      }
+    });
 
     polygons.forEach((polygon) => {
-      const layer = L.polygon(polygon.coordinates, {
-        color: "#000000",
-        fillColor: polygon.color || colorPalette[currentColorIndex],
-        fillOpacity: 0.3,
-        weight: 2,
-      });
+      if (!existingIds.includes(polygon.id)) {
+        const layer = L.polygon(polygon.coordinates, {
+          color: "#000000",
+          fillColor: polygon.color || colorPalette[currentColorIndex],
+          fillOpacity: 0.3,
+          weight: 2,
+        });
 
-      layer.properties = { name: polygon.name };
-      layer.bindTooltip(polygon.name, {
-        permanent: false,
-        direction: "center",
-      });
-      drawnItems.addLayer(layer);
+        layer.properties = {
+          id: polygon.id,
+          name: polygon.name,
+          color: polygon.color,
+        };
+
+        layer.bindTooltip(polygon.name, {
+          permanent: false,
+          direction: "center",
+        });
+        drawnItems.addLayer(layer);
+      }
     });
   } catch (error) {
     console.error("Error loading:", error);
@@ -208,7 +244,11 @@ function showNamePrompt(layer) {
   const name = prompt("Enter name for this polygon:");
 
   if (name !== null) {
-    layer.properties = { name: name };
+    layer.properties = {
+      id: generateUUID(),
+      name: name,
+      color: layer.options.fillColor,
+    };
     layer.bindTooltip(name, { permanent: false, direction: "center" });
     drawnItems.addLayer(layer);
     saveToServer();
@@ -260,8 +300,11 @@ function initializeMap() {
 
   map.on(L.Draw.Event.CREATED, function (e) {
     if (e.layerType === "polygon") {
+      const currentColor = colorPalette[currentColorIndex];
       e.layer.setStyle({
         color: "#000000",
+        fillColor: currentColor,
+        fillOpacity: 0.3,
         weight: 2,
       });
       showNamePrompt(e.layer);
@@ -271,10 +314,25 @@ function initializeMap() {
   map.on(L.Draw.Event.EDITED, function (e) {
     e.layers.eachLayer(function (layer) {
       if (layer instanceof L.Polygon) {
+        const existingProperties = layer.properties || {};
+        const existingColor =
+          existingProperties.color || layer.options.fillColor;
+
         layer.setStyle({
           color: "#000000",
+          fillColor: existingColor,
+          fillOpacity: 0.3,
           weight: 2,
         });
+
+        if (!layer.properties) {
+          layer.properties = {
+            id: generateUUID(),
+            color: existingColor,
+          };
+        } else {
+          layer.properties.color = existingColor;
+        }
       }
     });
     saveToServer();
