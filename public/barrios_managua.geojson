@@ -1483,7 +1483,7 @@
       "properties": {
         "id": "9f260115-a51f-40c8-8f90-395ef5b94fd1",
         "name": "Distrito I",
-        "color": "#97009c",
+        "color": "#FF6347",
         "type": "barrio",
         "admin_level": "10",
         "boundary": "administrative"
@@ -4197,7 +4197,7 @@
       "properties": {
         "id": "11fa4dd6-c2a3-4e1f-945d-3cc2648a56b6",
         "name": "Distrito III",
-        "color": "#97009c",
+        "color": "#00CED1",
         "type": "barrio",
         "admin_level": "10",
         "boundary": "administrative"
@@ -8883,7 +8883,7 @@
       "properties": {
         "id": "5d3b2e03-c983-4723-a792-a29774c86c28",
         "name": "Distrito IV",
-        "color": "#97009c",
+        "color": "#DA70D6",
         "type": "barrio",
         "admin_level": "10",
         "boundary": "administrative"
@@ -9901,7 +9901,7 @@
       "properties": {
         "id": "048c8f3c-0768-4d75-883f-ac1a1113c86f",
         "name": "Distrito VII",
-        "color": "#97009c",
+        "color": "#FF7F50",
         "type": "barrio",
         "admin_level": "10",
         "boundary": "administrative"
@@ -11831,7 +11831,7 @@
       "properties": {
         "id": "5d72623a-479b-4921-99a8-afd3255af24b",
         "name": "Distrito VI",
-        "color": "#97009c",
+        "color": "#DB7093",
         "type": "barrio",
         "admin_level": "10",
         "boundary": "administrative"
@@ -13373,7 +13373,7 @@
       "properties": {
         "id": "bb85cfcb-30d6-479d-8a00-1c0b798e2e80",
         "name": "Distrito V",
-        "color": "#97009c",
+        "color": "#CD853F",
         "type": "barrio",
         "admin_level": "10",
         "boundary": "administrative"
