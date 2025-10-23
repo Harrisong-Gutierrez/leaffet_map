@@ -13,21 +13,61 @@ function generateUUID() {
     return crypto.randomUUID();
   }
   // Fallback para navegadores antiguos
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c == 'x' ? r : (r & 0x3 | 0x8);
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c == "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
 }
 
 const colorPalette = [
-  "#97009c","#FF0000","#FF4500","#FF69B4","#8A2BE2","#4B0082","#0000FF",
-  "#1E90FF","#00BFFF","#FF1493","#DC143C","#B22222","#FF6347","#FF7F50",
-  "#FF8C00","#FFA500","#FFD700","#FFFF00","#ADFF2F","#7CFC00","#00FA9A",
-  "#00CED1","#4682B4","#6A5ACD","#9370DB","#8B008B","#9932CC","#BA55D3",
-  "#DA70D6","#FF00FF","#C71585","#DB7093","#FFB6C1","#FFA07A","#FFDAB9",
-  "#EEE8AA","#F0E68C","#BDB76B","#F4A460","#DAA520","#CD853F","#D2691E",
-  "#8B4513","#A0522D","#A52A2A","#800000","#2F4F4F",
+  "#97009c",
+  "#FF0000",
+  "#FF4500",
+  "#FF69B4",
+  "#8A2BE2",
+  "#4B0082",
+  "#0000FF",
+  "#1E90FF",
+  "#00BFFF",
+  "#FF1493",
+  "#DC143C",
+  "#B22222",
+  "#FF6347",
+  "#FF7F50",
+  "#FF8C00",
+  "#FFA500",
+  "#FFD700",
+  "#FFFF00",
+  "#ADFF2F",
+  "#7CFC00",
+  "#00FA9A",
+  "#00CED1",
+  "#4682B4",
+  "#6A5ACD",
+  "#9370DB",
+  "#8B008B",
+  "#9932CC",
+  "#BA55D3",
+  "#DA70D6",
+  "#FF00FF",
+  "#C71585",
+  "#DB7093",
+  "#FFB6C1",
+  "#FFA07A",
+  "#FFDAB9",
+  "#EEE8AA",
+  "#F0E68C",
+  "#BDB76B",
+  "#F4A460",
+  "#DAA520",
+  "#CD853F",
+  "#D2691E",
+  "#8B4513",
+  "#A0522D",
+  "#A52A2A",
+  "#800000",
+  "#2F4F4F",
 ];
 
 let currentColorIndex = 0;
@@ -77,7 +117,7 @@ function selectColor(index) {
   if (drawControl) {
     map.removeControl(drawControl);
   }
-  
+
   drawControl = new L.Control.Draw({
     draw: {
       polygon: {
@@ -127,9 +167,9 @@ function convertToGeoJSON(polygons) {
     name: "barrios_managua",
     crs: {
       type: "name",
-      properties: { name: "urn:ogc:def:crs:OGC:1.3:CRS84" }
+      properties: { name: "urn:ogc:def:crs:OGC:1.3:CRS84" },
     },
-    features: polygons.map(polygon => ({
+    features: polygons.map((polygon) => ({
       type: "Feature",
       properties: {
         id: polygon.id,
@@ -137,25 +177,52 @@ function convertToGeoJSON(polygons) {
         color: polygon.color,
         type: "barrio",
         admin_level: "10",
-        boundary: "administrative"
+        boundary: "administrative",
       },
       geometry: {
         type: "Polygon",
-        coordinates: [polygon.coordinates.map(coord => [coord[1], coord[0]])]
-      }
-    }))
+        coordinates: [polygon.coordinates.map((coord) => [coord[1], coord[0]])],
+      },
+    })),
   };
 }
 
+// FUNCIÓN CORREGIDA - Maneja tanto Polygon como MultiPolygon
 function convertFromGeoJSON(geoJSON) {
   if (!geoJSON || !geoJSON.features) return [];
-  
-  return geoJSON.features.map(feature => ({
-    id: feature.properties?.id || generateUUID(),
-    name: feature.properties?.name || "Unnamed",
-    color: feature.properties?.color || colorPalette[0],
-    coordinates: feature.geometry.coordinates[0].map(coord => [coord[1], coord[0]])
-  }));
+
+  const polygons = [];
+
+  geoJSON.features.forEach((feature) => {
+    const geometry = feature.geometry;
+    const properties = feature.properties || {};
+
+    if (geometry.type === "Polygon") {
+      // Para Polygon simple
+      geometry.coordinates.forEach((polygonCoords) => {
+        polygons.push({
+          id: properties.id || generateUUID(),
+          name: properties.name || "Unnamed",
+          color: properties.color || colorPalette[0],
+          coordinates: polygonCoords.map((coord) => [coord[1], coord[0]]), // Convertir [lng, lat] a [lat, lng]
+        });
+      });
+    } else if (geometry.type === "MultiPolygon") {
+      // Para MultiPolygon - iterar sobre cada polígono
+      geometry.coordinates.forEach((multiPolygon) => {
+        multiPolygon.forEach((polygonCoords) => {
+          polygons.push({
+            id: properties.id || generateUUID(),
+            name: properties.name || "Unnamed",
+            color: properties.color || colorPalette[0],
+            coordinates: polygonCoords.map((coord) => [coord[1], coord[0]]), // Convertir [lng, lat] a [lat, lng]
+          });
+        });
+      });
+    }
+  });
+
+  return polygons;
 }
 
 window.saveToServer = async function () {
@@ -166,8 +233,13 @@ window.saveToServer = async function () {
       polygons.push({
         id: layer.properties?.id || generateUUID(),
         name: layer.properties?.name || "Polygon " + layer._leaflet_id,
-        coordinates: layer.getLatLngs()[0].map((latlng) => [latlng.lat, latlng.lng]),
-        color: layer.properties?.color || layer.options.fillColor || colorPalette[currentColorIndex],
+        coordinates: layer
+          .getLatLngs()[0]
+          .map((latlng) => [latlng.lat, latlng.lng]),
+        color:
+          layer.properties?.color ||
+          layer.options.fillColor ||
+          colorPalette[currentColorIndex],
       });
     }
   });
@@ -176,36 +248,37 @@ window.saveToServer = async function () {
     const geoJSONData = convertToGeoJSON(polygons);
 
     const response = await fetch(`${API_URL}/save-geojson`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json'
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(geoJSONData)
+      body: JSON.stringify(geoJSONData),
     });
 
     if (response.ok) {
       console.log("Data saved to server successfully");
-      alert("Datos guardados correctamente");
+      console.log("Datos guardados correctamente");
     } else {
       console.error("Error saving data:", response.status);
-      alert("Error al guardar los datos");
+      console.log("Error al guardar los datos");
     }
   } catch (error) {
     console.error("Error:", error);
-    alert("Error de conexión con el servidor");
+    console.log("Error de conexión con el servidor");
   }
 };
 
 window.loadFromServer = async function () {
   try {
     const response = await fetch(`${API_URL}/barrios_managua.geojson`);
-    
+
     if (!response.ok) {
       console.log("No existing GeoJSON data found, starting fresh");
       return;
     }
 
     const geoJSONData = await response.json();
+
     const polygons = convertFromGeoJSON(geoJSONData);
 
     const existingIds = [];
@@ -217,27 +290,54 @@ window.loadFromServer = async function () {
 
     polygons.forEach((polygon) => {
       if (!existingIds.includes(polygon.id)) {
-        const layer = L.polygon(polygon.coordinates, {
-          color: "#000000",
-          fillColor: polygon.color || colorPalette[currentColorIndex],
-          fillOpacity: 0.3,
-          weight: 2,
-        });
+        try {
+          // Asegurar que el polígono esté cerrado (primera y última coordenada iguales)
+          const coordinates = [...polygon.coordinates];
+          if (coordinates.length > 0) {
+            const firstCoord = coordinates[0];
+            const lastCoord = coordinates[coordinates.length - 1];
 
-        layer.properties = {
-          id: polygon.id,
-          name: polygon.name,
-          color: polygon.color,
-        };
+            // Si no está cerrado, agregar la primera coordenada al final
+            if (
+              firstCoord[0] !== lastCoord[0] ||
+              firstCoord[1] !== lastCoord[1]
+            ) {
+              coordinates.push([firstCoord[0], firstCoord[1]]);
+            }
+          }
 
-        layer.bindTooltip(polygon.name, {
-          permanent: false,
-          direction: "center",
-        });
-        drawnItems.addLayer(layer);
+          const layer = L.polygon(coordinates, {
+            color: "#000000",
+            fillColor: polygon.color || colorPalette[currentColorIndex],
+            fillOpacity: 0.3,
+            weight: 2,
+          });
+
+          layer.properties = {
+            id: polygon.id,
+            name: polygon.name,
+            color: polygon.color,
+          };
+
+          layer.bindTooltip(polygon.name, {
+            permanent: false,
+            direction: "center",
+          });
+          drawnItems.addLayer(layer);
+
+          console.log(
+            "Added polygon:",
+            polygon.name,
+            "with",
+            coordinates.length,
+            "points"
+          );
+        } catch (error) {
+          console.error("Error creating polygon:", polygon.name, error);
+        }
       }
     });
-    
+
     console.log("Data loaded successfully");
   } catch (error) {
     console.error("Error loading data:", error);
@@ -253,24 +353,23 @@ function showNamePrompt(layer) {
       name: name.trim(),
       color: layer.options.fillColor,
     };
-    
-    layer.bindTooltip(name.trim(), { 
-      permanent: false, 
+
+    layer.bindTooltip(name.trim(), {
+      permanent: false,
       direction: "center",
-      className: 'polygon-tooltip'
+      className: "polygon-tooltip",
     });
-    
+
     drawnItems.addLayer(layer);
-    
+
     // Guardar después de un breve delay
     setTimeout(() => {
       saveToServer();
     }, 100);
-    
   } else {
     map.removeLayer(layer);
     if (name !== null) {
-      alert("Please enter a valid name");
+      console.log("Please enter a valid name");
     }
   }
 }
@@ -343,7 +442,8 @@ function initializeMap() {
     e.layers.eachLayer(function (layer) {
       if (layer instanceof L.Polygon) {
         const existingProperties = layer.properties || {};
-        const existingColor = existingProperties.color || layer.options.fillColor;
+        const existingColor =
+          existingProperties.color || layer.options.fillColor;
 
         layer.setStyle({
           color: "#000000",
@@ -356,7 +456,7 @@ function initializeMap() {
           layer.properties = {
             id: generateUUID(),
             color: existingColor,
-            name: "Polygon " + layer._leaflet_id
+            name: "Polygon " + layer._leaflet_id,
           };
         } else {
           layer.properties.color = existingColor;
@@ -372,7 +472,7 @@ function initializeMap() {
 
   // Cargar datos existentes
   loadFromServer();
-  
+
   // Asegurar que el mapa se redibuje correctamente
   setTimeout(() => {
     map.invalidateSize();
