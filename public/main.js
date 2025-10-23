@@ -12,54 +12,13 @@ function generateUUID() {
 }
 
 const colorPalette = [
-  "#97009c",
-  "#FF0000",
-  "#FF4500",
-  "#FF69B4",
-  "#8A2BE2",
-  "#4B0082",
-  "#0000FF",
-  "#1E90FF",
-  "#00BFFF",
-  "#FF1493",
-  "#DC143C",
-  "#B22222",
-  "#FF6347",
-  "#FF7F50",
-  "#FF8C00",
-  "#FFA500",
-  "#FFD700",
-  "#FFFF00",
-  "#ADFF2F",
-  "#7CFC00",
-  "#00FA9A",
-  "#00CED1",
-  "#4682B4",
-  "#6A5ACD",
-  "#9370DB",
-  "#8B008B",
-  "#9932CC",
-  "#BA55D3",
-  "#DA70D6",
-  "#FF00FF",
-  "#FF00FF",
-  "#C71585",
-  "#DB7093",
-  "#FFB6C1",
-  "#FFA07A",
-  "#FFDAB9",
-  "#EEE8AA",
-  "#F0E68C",
-  "#BDB76B",
-  "#F4A460",
-  "#DAA520",
-  "#CD853F",
-  "#D2691E",
-  "#8B4513",
-  "#A0522D",
-  "#A52A2A",
-  "#800000",
-  "#2F4F4F",
+  "#97009c","#FF0000","#FF4500","#FF69B4","#8A2BE2","#4B0082","#0000FF",
+  "#1E90FF","#00BFFF","#FF1493","#DC143C","#B22222","#FF6347","#FF7F50",
+  "#FF8C00","#FFA500","#FFD700","#FFFF00","#ADFF2F","#7CFC00","#00FA9A",
+  "#00CED1","#4682B4","#6A5ACD","#9370DB","#8B008B","#9932CC","#BA55D3",
+  "#DA70D6","#FF00FF","#C71585","#DB7093","#FFB6C1","#FFA07A","#FFDAB9",
+  "#EEE8AA","#F0E68C","#BDB76B","#F4A460","#DAA520","#CD853F","#D2691E",
+  "#8B4513","#A0522D","#A52A2A","#800000","#2F4F4F",
 ];
 
 let currentColorIndex = 0;
@@ -143,6 +102,41 @@ window.changeColor = function () {
   palette.style.display = palette.style.display === "grid" ? "none" : "grid";
 };
 
+function convertToGeoJSON(polygons) {
+  return {
+    type: "FeatureCollection",
+    name: "barrios_managua",
+    crs: {
+      type: "name",
+      properties: { name: "urn:ogc:def:crs:OGC:1.3:CRS84" }
+    },
+    features: polygons.map(polygon => ({
+      type: "Feature",
+      properties: {
+        id: polygon.id,
+        name: polygon.name,
+        color: polygon.color,
+        type: "barrio",
+        admin_level: "10",
+        boundary: "administrative"
+      },
+      geometry: {
+        type: "Polygon",
+        coordinates: [polygon.coordinates.map(coord => [coord[1], coord[0]])]
+      }
+    }))
+  };
+}
+
+function convertFromGeoJSON(geoJSON) {
+  return geoJSON.features.map(feature => ({
+    id: feature.properties.id,
+    name: feature.properties.name,
+    color: feature.properties.color,
+    coordinates: feature.geometry.coordinates[0].map(coord => [coord[1], coord[0]])
+  }));
+}
+
 window.saveToServer = async function () {
   const polygons = [];
 
@@ -151,52 +145,28 @@ window.saveToServer = async function () {
       polygons.push({
         id: layer.properties?.id || generateUUID(),
         name: layer.properties?.name || "Polygon " + layer._leaflet_id,
-        coordinates: layer
-          .getLatLngs()[0]
-          .map((latlng) => [latlng.lat, latlng.lng]),
-        color:
-          layer.properties?.color ||
-          layer.options.fillColor ||
-          colorPalette[currentColorIndex],
+        coordinates: layer.getLatLngs()[0].map((latlng) => [latlng.lat, latlng.lng]),
+        color: layer.properties?.color || layer.options.fillColor || colorPalette[currentColorIndex],
       });
     }
   });
 
   try {
-    const existingPolygons = await fetch(`${API_URL}/polygons`).then((r) =>
-      r.json()
-    );
+    const geoJSONData = convertToGeoJSON(polygons);
 
-    const polygonsToDelete = existingPolygons.filter(
-      (serverPolygon) =>
-        !polygons.some((localPolygon) => localPolygon.id === serverPolygon.id)
-    );
+    const response = await fetch(`${API_URL}/save-geojson`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(geoJSONData)
+    });
 
-    await Promise.all(
-      polygonsToDelete.map((polygon) =>
-        fetch(`${API_URL}/polygons/${polygon.id}`, { method: "DELETE" })
-      )
-    );
-
-    await Promise.all(
-      polygons.map((polygon) => {
-        const method = existingPolygons.some((ep) => ep.id === polygon.id)
-          ? "PUT"
-          : "POST";
-        const url =
-          method === "PUT"
-            ? `${API_URL}/polygons/${polygon.id}`
-            : `${API_URL}/polygons`;
-
-        return fetch(url, {
-          method: method,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(polygon),
-        });
-      })
-    );
-
-    console.log("Data saved to server");
+    if (response.ok) {
+      console.log("Data saved to server");
+    } else {
+      console.error("Error saving data:", response.status);
+    }
   } catch (error) {
     console.error("Error:", error);
   }
@@ -204,7 +174,15 @@ window.saveToServer = async function () {
 
 window.loadFromServer = async function () {
   try {
-    const polygons = await fetch(`${API_URL}/polygons`).then((r) => r.json());
+    const response = await fetch(`${API_URL}/barrios_managua.geojson`);
+    
+    if (!response.ok) {
+      console.log("No GeoJSON data found, starting fresh");
+      return;
+    }
+
+    const geoJSONData = await response.json();
+    const polygons = convertFromGeoJSON(geoJSONData);
 
     const existingIds = [];
     drawnItems.eachLayer((layer) => {
@@ -315,8 +293,7 @@ function initializeMap() {
     e.layers.eachLayer(function (layer) {
       if (layer instanceof L.Polygon) {
         const existingProperties = layer.properties || {};
-        const existingColor =
-          existingProperties.color || layer.options.fillColor;
+        const existingColor = existingProperties.color || layer.options.fillColor;
 
         layer.setStyle({
           color: "#000000",
