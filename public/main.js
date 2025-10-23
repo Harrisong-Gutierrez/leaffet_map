@@ -7,8 +7,17 @@ let drawnItems;
 let drawControl;
 const API_URL = "http://localhost:3001";
 
+// UUID corregido
 function generateUUID() {
-  return uuid.v4();
+  if (crypto && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback para navegadores antiguos
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 const colorPalette = [
@@ -65,7 +74,10 @@ function selectColor(index) {
   currentColorIndex = index;
   const newColor = colorPalette[currentColorIndex];
 
-  map.removeControl(drawControl);
+  if (drawControl) {
+    map.removeControl(drawControl);
+  }
+  
   drawControl = new L.Control.Draw({
     draw: {
       polygon: {
@@ -92,14 +104,21 @@ function selectColor(index) {
   map.addControl(drawControl);
 
   const palette = document.getElementById("colorPalette");
-  palette.style.display = "none";
+  if (palette) {
+    palette.style.display = "none";
+  }
 
-  document.getElementById("colorButton").style.backgroundColor = newColor;
+  const colorButton = document.getElementById("colorButton");
+  if (colorButton) {
+    colorButton.style.backgroundColor = newColor;
+  }
 }
 
 window.changeColor = function () {
   const palette = document.getElementById("colorPalette");
-  palette.style.display = palette.style.display === "grid" ? "none" : "grid";
+  if (palette) {
+    palette.style.display = palette.style.display === "grid" ? "none" : "grid";
+  }
 };
 
 function convertToGeoJSON(polygons) {
@@ -129,10 +148,12 @@ function convertToGeoJSON(polygons) {
 }
 
 function convertFromGeoJSON(geoJSON) {
+  if (!geoJSON || !geoJSON.features) return [];
+  
   return geoJSON.features.map(feature => ({
-    id: feature.properties.id,
-    name: feature.properties.name,
-    color: feature.properties.color,
+    id: feature.properties?.id || generateUUID(),
+    name: feature.properties?.name || "Unnamed",
+    color: feature.properties?.color || colorPalette[0],
     coordinates: feature.geometry.coordinates[0].map(coord => [coord[1], coord[0]])
   }));
 }
@@ -163,12 +184,15 @@ window.saveToServer = async function () {
     });
 
     if (response.ok) {
-      console.log("Data saved to server");
+      console.log("Data saved to server successfully");
+      alert("Datos guardados correctamente");
     } else {
       console.error("Error saving data:", response.status);
+      alert("Error al guardar los datos");
     }
   } catch (error) {
     console.error("Error:", error);
+    alert("Error de conexión con el servidor");
   }
 };
 
@@ -177,7 +201,7 @@ window.loadFromServer = async function () {
     const response = await fetch(`${API_URL}/barrios_managua.geojson`);
     
     if (!response.ok) {
-      console.log("No GeoJSON data found, starting fresh");
+      console.log("No existing GeoJSON data found, starting fresh");
       return;
     }
 
@@ -213,29 +237,51 @@ window.loadFromServer = async function () {
         drawnItems.addLayer(layer);
       }
     });
+    
+    console.log("Data loaded successfully");
   } catch (error) {
-    console.error("Error loading:", error);
+    console.error("Error loading data:", error);
   }
 };
 
 function showNamePrompt(layer) {
-  const name = prompt("Enter name for this polygon:");
+  const name = prompt("Enter name for this polygon:", "New Polygon");
 
-  if (name !== null) {
+  if (name !== null && name.trim() !== "") {
     layer.properties = {
       id: generateUUID(),
-      name: name,
+      name: name.trim(),
       color: layer.options.fillColor,
     };
-    layer.bindTooltip(name, { permanent: false, direction: "center" });
+    
+    layer.bindTooltip(name.trim(), { 
+      permanent: false, 
+      direction: "center",
+      className: 'polygon-tooltip'
+    });
+    
     drawnItems.addLayer(layer);
-    saveToServer();
+    
+    // Guardar después de un breve delay
+    setTimeout(() => {
+      saveToServer();
+    }, 100);
+    
   } else {
     map.removeLayer(layer);
+    if (name !== null) {
+      alert("Please enter a valid name");
+    }
   }
 }
 
 function initializeMap() {
+  const mapElement = document.getElementById("map");
+  if (!mapElement) {
+    console.error("Map element not found");
+    return;
+  }
+
   map = L.map("map").setView([12.1147, -86.2362], 12);
 
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -248,8 +294,12 @@ function initializeMap() {
 
   createColorPalette();
 
+  // Asegurar que el botón de color tenga el ID correcto
   const colorButton = document.querySelector("button");
-  colorButton.id = "colorButton";
+  if (colorButton) {
+    colorButton.id = "colorButton";
+    colorButton.style.backgroundColor = colorPalette[currentColorIndex];
+  }
 
   drawControl = new L.Control.Draw({
     draw: {
@@ -306,6 +356,7 @@ function initializeMap() {
           layer.properties = {
             id: generateUUID(),
             color: existingColor,
+            name: "Polygon " + layer._leaflet_id
           };
         } else {
           layer.properties.color = existingColor;
@@ -319,6 +370,11 @@ function initializeMap() {
     saveToServer();
   });
 
+  // Cargar datos existentes
   loadFromServer();
-  map.invalidateSize();
+  
+  // Asegurar que el mapa se redibuje correctamente
+  setTimeout(() => {
+    map.invalidateSize();
+  }, 100);
 }
