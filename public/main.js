@@ -225,6 +225,84 @@ function convertFromGeoJSON(geoJSON) {
   return polygons;
 }
 
+// Función para determinar si es distrito o barrio basado en el nombre Y tamaño
+function getPolygonType(layer) {
+  const name = layer.properties?.name || "";
+  
+  // Primero verificar por nombre
+  if (name.toLowerCase().includes('distrito') || /^distrito\s*\d+/i.test(name)) {
+    return 'distrito';
+  }
+  
+  // Si no se detecta por nombre, verificar por tamaño del polígono
+  try {
+    const latLngs = layer.getLatLngs()[0];
+    const area = L.GeometryUtil.geodesicArea(latLngs);
+    const areaKm2 = area / 1000000; // Convertir a km²
+    
+    // Si el área es mayor a 2 km², considerarlo distrito
+    if (areaKm2 > 5) {
+      return 'distrito';
+    }
+  } catch (error) {
+    console.log("Error calculando área del polígono:", error);
+  }
+  
+  return 'barrio';
+}
+
+// Función para actualizar etiquetas según el zoom
+function updateLabelsVisibility() {
+  const currentZoom = map.getZoom();
+  
+  drawnItems.eachLayer(function (layer) {
+    if (layer instanceof L.Polygon && layer.properties && layer.properties.name) {
+      const tooltip = layer.getTooltip();
+      
+      if (tooltip) {
+        const polygonType = getPolygonType(layer);
+        
+        // DIFERENTES NIVELES DE ZOOM PARA DISTRITOS Y BARRIOS
+        if (polygonType === 'distrito') {
+          // Distritos aparecen desde zoom 14
+          if (currentZoom >= 14) {
+            if (!tooltip.isOpen()) {
+              layer.openTooltip();
+            }
+            const tooltipElement = layer._tooltip._container;
+            if (tooltipElement) {
+              tooltipElement.style.fontWeight = 'bold';
+              tooltipElement.style.fontSize = '16px';
+              tooltipElement.style.textShadow = '2px 2px 4px rgba(0,0,0,0.8)';
+            }
+          } else {
+            if (tooltip.isOpen()) {
+              layer.closeTooltip();
+            }
+          }
+        } else {
+          // Barrios aparecen desde zoom 16
+          if (currentZoom >= 16) {
+            if (!tooltip.isOpen()) {
+              layer.openTooltip();
+            }
+            const tooltipElement = layer._tooltip._container;
+            if (tooltipElement) {
+              tooltipElement.style.fontWeight = 'normal';
+              tooltipElement.style.fontSize = '11px';
+              tooltipElement.style.textShadow = '1px 1px 2px rgba(0,0,0,0.6)';
+            }
+          } else {
+            if (tooltip.isOpen()) {
+              layer.closeTooltip();
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
 window.saveToServer = async function () {
   const polygons = [];
 
@@ -319,10 +397,15 @@ window.loadFromServer = async function () {
             color: polygon.color,
           };
 
-          layer.bindTooltip(polygon.name, {
-            permanent: false,
+          // Crear tooltip permanente en el centro
+          const polygonType = getPolygonType(layer);
+          const tooltipOptions = {
+            permanent: true,
             direction: "center",
-          });
+            className: "polygon-tooltip " + polygonType,
+          };
+
+          layer.bindTooltip(polygon.name, tooltipOptions);
           drawnItems.addLayer(layer);
 
           console.log(
@@ -338,6 +421,8 @@ window.loadFromServer = async function () {
       }
     });
 
+    // Actualizar visibilidad de etiquetas después de cargar
+    updateLabelsVisibility();
     console.log("Data loaded successfully");
   } catch (error) {
     console.error("Error loading data:", error);
@@ -354,13 +439,18 @@ function showNamePrompt(layer) {
       color: layer.options.fillColor,
     };
 
-    layer.bindTooltip(name.trim(), {
-      permanent: false,
+    const polygonType = getPolygonType(layer);
+    const tooltipOptions = {
+      permanent: true,
       direction: "center",
-      className: "polygon-tooltip",
-    });
+      className: "polygon-tooltip " + polygonType,
+    };
 
+    layer.bindTooltip(name.trim(), tooltipOptions);
     drawnItems.addLayer(layer);
+
+    // Actualizar visibilidad después de agregar
+    updateLabelsVisibility();
 
     // Guardar después de un breve delay
     setTimeout(() => {
@@ -424,6 +514,10 @@ function initializeMap() {
   });
 
   map.addControl(drawControl);
+
+  // Escuchar cambios de zoom para actualizar etiquetas
+  map.on('zoomend', updateLabelsVisibility);
+  map.on('moveend', updateLabelsVisibility);
 
   map.on(L.Draw.Event.CREATED, function (e) {
     if (e.layerType === "polygon") {

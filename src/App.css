@@ -29,3 +29,28 @@ body {
 .leaflet-control-custom button:hover {
   background: #7a007e;
 }
+
+/* Estilos para las etiquetas de polígonos */
+.polygon-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  font-weight: normal;
+  pointer-events: none !important;
+}
+
+.polygon-tooltip.distrito {
+  font-weight: bold !important;
+  font-size: 14px !important;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.8) !important;
+}
+
+.polygon-tooltip.barrio {
+  font-weight: normal !important;
+  font-size: 10px !important;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.6) !important;
+}
+
+.leaflet-tooltip {
+  pointer-events: none !important;
+}
