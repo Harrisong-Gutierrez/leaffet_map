@@ -132,7 +132,7 @@ function getPolygonType(layer) {
     try {
         const latLngs = layer.getLatLngs()[0];
         const area = L.GeometryUtil.geodesicArea(latLngs);
-        if (area / 1000000 > 5) return 'distrito';
+        if (area / 1000000 > 10) return 'distrito';
     } catch (error) {
         console.log("Error calculando área:", error);
     }
