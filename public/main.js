@@ -1,9 +1,8 @@
 window.addEventListener("load", initializeMap);
 
-let map, drawnItems, drawControl;
+let map, drawnItems;
 const API_URL = "http://localhost:3001";
 
-// Configuración centralizada
 const CONFIG = {
     polygonStyle: {
         color: "#000000",
@@ -20,20 +19,10 @@ const CONFIG = {
     }
 };
 
-const colorPalette = [
-    "#97009c", "#FF0000", "#FF4500", "#FF69B4", "#8A2BE2", "#4B0082", "#0000FF", 
-    "#1E90FF", "#00BFFF", "#FF1493", "#DC143C", "#B22222", "#FF6347", "#FF7F50", 
-    "#FF8C00", "#FFA500", "#FFD700", "#FFFF00", "#ADFF2F", "#7CFC00", "#00FA9A", 
-    "#00CED1", "#4682B4", "#6A5ACD", "#9370DB", "#8B008B", "#9932CC", "#BA55D3", 
-    "#DA70D6", "#FF00FF", "#C71585", "#DB7093", "#FFB6C1", "#FFA07A", "#FFDAB9", 
-    "#EEE8AA", "#F0E68C", "#BDB76B", "#F4A460", "#DAA520", "#CD853F", "#D2691E", 
-    "#8B4513", "#A0522D", "#A52A2A", "#800000", "#2F4F4F"
-];
+const colorPalette = ["#97009c"];
 
 let currentColorIndex = 0;
-let zoomTimeout;
 
-// UUID optimizado
 function generateUUID() {
     return crypto?.randomUUID?.() || 
         ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
@@ -41,28 +30,6 @@ function generateUUID() {
         );
 }
 
-// Función única para crear controles de dibujo
-function createDrawControl(color) {
-    return new L.Control.Draw({
-        draw: {
-            polygon: {
-                allowIntersection: false,
-                shapeOptions: { ...CONFIG.polygonStyle, fillColor: color }
-            },
-            polyline: false,
-            rectangle: false,
-            circle: false,
-            circlemarker: false,
-            marker: false
-        },
-        edit: {
-            featureGroup: drawnItems,
-            remove: true
-        }
-    });
-}
-
-// Función optimizada para crear polígonos
 function createPolygon(coordinates, properties = {}) {
     const layer = L.polygon(coordinates, {
         ...CONFIG.polygonStyle,
@@ -84,7 +51,6 @@ function createPolygon(coordinates, properties = {}) {
     return layer;
 }
 
-// Función única para manejar tooltips
 function updateLayerTooltip(layer, currentZoom) {
     if (!(layer instanceof L.Polygon) || !layer.properties?.name) return;
 
@@ -108,7 +74,6 @@ function updateLayerTooltip(layer, currentZoom) {
     }
 }
 
-// Debounce para optimizar eventos de zoom
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -121,7 +86,6 @@ function debounce(func, wait) {
     };
 }
 
-// Función para determinar tipo de polígono (optimizada)
 function getPolygonType(layer) {
     const name = layer.properties?.name || "";
     
@@ -132,66 +96,14 @@ function getPolygonType(layer) {
     try {
         const latLngs = layer.getLatLngs()[0];
         const area = L.GeometryUtil.geodesicArea(latLngs);
-        if (area / 1000000 > 10) return 'distrito';
+        if (area / 1000000 > 15) return 'distrito';
     } catch (error) {
-        console.log("Error calculando área:", error);
+        console.log("Error calculating area:", error);
     }
     
     return 'barrio';
 }
 
-// Paleta de colores optimizada
-function createColorPalette() {
-    const paletteContainer = document.createElement("div");
-    paletteContainer.id = "colorPalette";
-    paletteContainer.style.cssText = `
-        position: fixed; top: 60px; right: 10px; z-index: 1000;
-        background: white; padding: 10px; border-radius: 5px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.3); display: none;
-        grid-template-columns: repeat(6, 30px); gap: 5px;
-        max-height: 200px; overflow-y: auto;
-    `;
-
-    const fragment = document.createDocumentFragment();
-    colorPalette.forEach((color, index) => {
-        const colorBox = document.createElement("div");
-        colorBox.style.cssText = `
-            width: 30px; height: 30px; background-color: ${color};
-            border: 2px solid #ccc; border-radius: 3px; cursor: pointer;
-        `;
-        colorBox.title = color;
-        colorBox.onclick = () => selectColor(index);
-        fragment.appendChild(colorBox);
-    });
-
-    paletteContainer.appendChild(fragment);
-    document.body.appendChild(paletteContainer);
-    return paletteContainer;
-}
-
-// Función optimizada para selección de color
-function selectColor(index) {
-    currentColorIndex = index;
-    const newColor = colorPalette[currentColorIndex];
-
-    if (drawControl) map.removeControl(drawControl);
-    
-    drawControl = createDrawControl(newColor);
-    map.addControl(drawControl);
-
-    const palette = document.getElementById("colorPalette");
-    if (palette) palette.style.display = "none";
-
-    const colorButton = document.getElementById("colorButton");
-    if (colorButton) colorButton.style.backgroundColor = newColor;
-}
-
-window.changeColor = function() {
-    const palette = document.getElementById("colorPalette");
-    if (palette) palette.style.display = palette.style.display === "grid" ? "none" : "grid";
-};
-
-// Conversión GeoJSON optimizada
 function convertToGeoJSON(polygons) {
     return {
         type: "FeatureCollection",
@@ -216,37 +128,54 @@ function convertToGeoJSON(polygons) {
 }
 
 function convertFromGeoJSON(geoJSON) {
-    if (!geoJSON?.features) return [];
+    if (!geoJSON) return [];
 
     const polygons = [];
-    geoJSON.features.forEach(feature => {
-        const geometry = feature.geometry;
-        const properties = feature.properties || {};
-
-        const processCoordinates = (coords) => ({
-            id: properties.id || generateUUID(),
-            name: properties.name || "Unnamed",
-            color: properties.color || colorPalette[0],
-            coordinates: coords.map(coord => [coord[1], coord[0]])
+    
+    if (geoJSON.type === "FeatureCollection" && geoJSON.features) {
+        geoJSON.features.forEach(feature => {
+            processFeature(feature, polygons);
         });
-
-        if (geometry.type === "Polygon") {
-            geometry.coordinates.forEach(polygonCoords => {
-                polygons.push(processCoordinates(polygonCoords));
-            });
-        } else if (geometry.type === "MultiPolygon") {
-            geometry.coordinates.forEach(multiPolygon => {
-                multiPolygon.forEach(polygonCoords => {
-                    polygons.push(processCoordinates(polygonCoords));
-                });
-            });
-        }
-    });
-
+    } else if (geoJSON.type === "Feature") {
+        processFeature(geoJSON, polygons);
+    }
+    
     return polygons;
 }
 
-// Guardado optimizado
+function processFeature(feature, polygons) {
+    const geometry = feature.geometry;
+    const properties = feature.properties || {};
+    
+    const getName = () => {
+        if (properties.N_Comun) return properties.N_Comun;
+        if (properties.name) return properties.name;
+        return "Unnamed Polygon";
+    };
+    
+    const polygonName = getName();
+    const polygonId = properties.id || properties.ID_UNICO || properties.id_unico_1 || generateUUID();
+    
+    const processCoordinates = (coords) => ({
+        id: polygonId,
+        name: polygonName,
+        color: properties.color || colorPalette[0],
+        coordinates: coords.map(coord => [coord[1], coord[0]])
+    });
+
+    if (geometry.type === "Polygon") {
+        geometry.coordinates.forEach(polygonCoords => {
+            polygons.push(processCoordinates(polygonCoords));
+        });
+    } else if (geometry.type === "MultiPolygon") {
+        geometry.coordinates.forEach(multiPolygon => {
+            multiPolygon.forEach(polygonCoords => {
+                polygons.push(processCoordinates(polygonCoords));
+            });
+        });
+    }
+}
+
 window.saveToServer = async function() {
     const polygons = [];
     drawnItems.eachLayer(layer => {
@@ -272,7 +201,6 @@ window.saveToServer = async function() {
     }
 };
 
-// Carga optimizada
 window.loadFromServer = async function() {
     try {
         const response = await fetch(`${API_URL}/barrios_managua.geojson`);
@@ -282,14 +210,15 @@ window.loadFromServer = async function() {
         }
 
         const geoJSONData = await response.json();
+        
         const polygons = convertFromGeoJSON(geoJSONData);
+
         const existingIds = new Set();
 
         drawnItems.eachLayer(layer => {
             if (layer.properties?.id) existingIds.add(layer.properties.id);
         });
 
-        // Carga en lote para mejor rendimiento
         polygons.forEach(polygon => {
             if (!existingIds.has(polygon.id)) {
                 try {
@@ -316,37 +245,6 @@ window.loadFromServer = async function() {
     }
 };
 
-// Función optimizada para prompts
-function showNamePrompt(layer) {
-    const name = prompt("Enter name for this polygon:", "New Polygon");
-    if (name === null) {
-        map.removeLayer(layer);
-        return;
-    }
-
-    if (name.trim() !== "") {
-        layer.properties = {
-            id: generateUUID(),
-            name: name.trim(),
-            color: layer.options.fillColor
-        };
-
-        const polygonType = getPolygonType(layer);
-        layer.bindTooltip(name.trim(), {
-            ...CONFIG.tooltip,
-            className: `polygon-tooltip ${polygonType}`
-        });
-
-        drawnItems.addLayer(layer);
-        updateLabelsVisibility();
-        setTimeout(saveToServer, 100);
-    } else {
-        map.removeLayer(layer);
-        console.log("Please enter a valid name");
-    }
-}
-
-// Actualización de etiquetas optimizada con debounce
 const updateLabelsVisibility = debounce(function() {
     const currentZoom = map.getZoom();
     drawnItems.eachLayer(layer => {
@@ -354,7 +252,6 @@ const updateLabelsVisibility = debounce(function() {
     });
 }, 150);
 
-// Inicialización optimizada del mapa
 function initializeMap() {
     const mapElement = document.getElementById("map");
     if (!mapElement) {
@@ -371,56 +268,9 @@ function initializeMap() {
     drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
 
-    createColorPalette();
-
-    const colorButton = document.querySelector("button");
-    if (colorButton) {
-        colorButton.id = "colorButton";
-        colorButton.style.backgroundColor = colorPalette[currentColorIndex];
-    }
-
-    drawControl = createDrawControl(colorPalette[currentColorIndex]);
-    map.addControl(drawControl);
-
-    // Eventos optimizados
     map.on('zoomend', updateLabelsVisibility);
     map.on('moveend', updateLabelsVisibility);
 
-    map.on(L.Draw.Event.CREATED, function(e) {
-        if (e.layerType === "polygon") {
-            e.layer.setStyle({
-                ...CONFIG.polygonStyle,
-                fillColor: colorPalette[currentColorIndex]
-            });
-            showNamePrompt(e.layer);
-        }
-    });
-
-    map.on(L.Draw.Event.EDITED, function(e) {
-        e.layers.eachLayer(layer => {
-            if (layer instanceof L.Polygon) {
-                const existingProperties = layer.properties || {};
-                const existingColor = existingProperties.color || layer.options.fillColor;
-                
-                layer.setStyle({
-                    ...CONFIG.polygonStyle,
-                    fillColor: existingColor
-                });
-
-                layer.properties = layer.properties || {
-                    id: generateUUID(),
-                    color: existingColor,
-                    name: "Polygon " + layer._leaflet_id
-                };
-                layer.properties.color = existingColor;
-            }
-        });
-        saveToServer();
-    });
-
-    map.on(L.Draw.Event.DELETED, saveToServer);
-
-    // Cargar datos y redimensionar
     loadFromServer();
     setTimeout(() => map.invalidateSize(), 100);
 }
