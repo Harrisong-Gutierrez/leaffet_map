@@ -19,9 +19,37 @@ const CONFIG = {
     }
 };
 
-const colorPalette = ["#97009c"];
+// Colores radicalmente diferentes para cada distrito
+const DISTRICT_COLORS = [
+    "#FF0000", // Rojo vivo
+    "#00FF00", // Verde puro  
+    "#0000FF", // Azul puro
+    "#FFFF00", // Amarillo
+    "#FF00FF", // Magenta
+    "#00FFFF", // Cian
+    "#FF8000", // Naranja fuerte
+    "#8000FF", // Violeta
+    "#00FF80", // Verde azulado
+    "#FF0080", // Rosa intenso
+    "#80FF00", // Lima
+    "#0080FF", // Azul eléctrico
+    "#FF8040", // Naranja pastel
+    "#40FF80", // Verde menta
+    "#8040FF"  // Lila
+];
 
-let currentColorIndex = 0;
+// Color único para todos los barrios
+const BARRIO_COLOR = "#97009c";
+
+let districtColorMap = new Map();
+
+function getDistrictColor(districtName) {
+    if (!districtColorMap.has(districtName)) {
+        const colorIndex = districtColorMap.size % DISTRICT_COLORS.length;
+        districtColorMap.set(districtName, DISTRICT_COLORS[colorIndex]);
+    }
+    return districtColorMap.get(districtName);
+}
 
 function generateUUID() {
     return crypto?.randomUUID?.() || 
@@ -31,18 +59,25 @@ function generateUUID() {
 }
 
 function createPolygon(coordinates, properties = {}) {
+    const polygonType = getPolygonType({ properties });
+    
+    // Solo los distritos obtienen colores diferentes
+    const color = polygonType === 'distrito' 
+        ? getDistrictColor(properties.name)
+        : BARRIO_COLOR;
+    
     const layer = L.polygon(coordinates, {
         ...CONFIG.polygonStyle,
-        fillColor: properties.color || colorPalette[currentColorIndex]
+        fillColor: color
     });
 
     layer.properties = {
         id: properties.id || generateUUID(),
         name: properties.name || "Unnamed",
-        color: properties.color || colorPalette[currentColorIndex]
+        color: color,
+        type: polygonType
     };
 
-    const polygonType = getPolygonType(layer);
     layer.bindTooltip(layer.properties.name, {
         ...CONFIG.tooltip,
         className: `polygon-tooltip ${polygonType}`
@@ -62,13 +97,6 @@ function updateLayerTooltip(layer, currentZoom) {
     
     if (currentZoom >= minZoom) {
         if (!tooltip.isOpen()) layer.openTooltip();
-        const tooltipElement = layer._tooltip?._container;
-        if (tooltipElement) {
-            tooltipElement.style.fontWeight = polygonType === 'distrito' ? 'bold' : 'normal';
-            tooltipElement.style.fontSize = polygonType === 'distrito' ? '16px' : '11px';
-            tooltipElement.style.textShadow = polygonType === 'distrito' ? 
-                '2px 2px 4px rgba(0,0,0,0.8)' : '1px 1px 2px rgba(0,0,0,0.6)';
-        }
     } else if (tooltip.isOpen()) {
         layer.closeTooltip();
     }
@@ -155,11 +183,17 @@ function processFeature(feature, polygons) {
     
     const polygonName = getName();
     const polygonId = properties.id || properties.ID_UNICO || properties.id_unico_1 || generateUUID();
+    const polygonType = getPolygonType({ properties });
+    
+    // Determinar el color basado en el tipo de polígono
+    const color = polygonType === 'distrito' 
+        ? getDistrictColor(polygonName)
+        : BARRIO_COLOR;
     
     const processCoordinates = (coords) => ({
         id: polygonId,
         name: polygonName,
-        color: properties.color || colorPalette[0],
+        color: color,
         coordinates: coords.map(coord => [coord[1], coord[0]])
     });
 
@@ -184,7 +218,7 @@ window.saveToServer = async function() {
                 id: layer.properties?.id || generateUUID(),
                 name: layer.properties?.name || "Polygon " + layer._leaflet_id,
                 coordinates: layer.getLatLngs()[0].map(latlng => [latlng.lat, latlng.lng]),
-                color: layer.properties?.color || layer.options.fillColor || colorPalette[currentColorIndex]
+                color: layer.properties?.color || layer.options.fillColor
             });
         }
     });
