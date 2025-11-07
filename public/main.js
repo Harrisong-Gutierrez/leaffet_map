@@ -124,6 +124,15 @@ function createPolygonLayer(coordinates, properties = {}) {
     className: `polygon-tooltip ${type}`,
   });
 
+  // Agregar evento de clic derecho para eliminar
+  layer.on('contextmenu', function(e) {
+    e.originalEvent.preventDefault();
+    if (confirm('¿Estás seguro de que quieres eliminar este polígono?')) {
+      drawnItems.removeLayer(layer);
+      saveToServer();
+    }
+  });
+
   return layer;
 }
 
@@ -238,7 +247,12 @@ window.saveToServer = async function () {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(convertToGeoJSON(polygons)),
     });
-    console.log(response.ok ? "Data saved successfully" : "Error saving data");
+    
+    if (response.ok) {
+      console.log("Data saved successfully");
+    } else {
+      console.log("Error saving data");
+    }
   } catch (error) {
     console.error("Error:", error);
   }
@@ -311,6 +325,49 @@ function initializeMap() {
 
   drawnItems = new L.FeatureGroup();
   map.addLayer(drawnItems);
+
+  // Configurar control de dibujo nativo de Leaflet
+  const drawControl = new L.Control.Draw({
+    draw: {
+      polygon: {
+        allowIntersection: false,
+        drawError: {
+          color: '#e1e100',
+          message: '<strong>Error:</strong> ¡Las formas no se pueden intersectar!'
+        },
+        shapeOptions: {
+          color: '#97009c',
+          fillOpacity: 0.3,
+          weight: 2
+        }
+      },
+      polyline: false,
+      circle: false,
+      rectangle: false,
+      circlemarker: false,
+      marker: false
+    },
+    edit: false
+  });
+  
+  map.addControl(drawControl);
+
+  // Evento cuando se crea un nuevo polígono
+  map.on(L.Draw.Event.CREATED, function (event) {
+    const layer = event.layer;
+    if (layer instanceof L.Polygon) {
+      const polygonName = prompt('Ingresa el nombre del nuevo polígono:', 'Nuevo Polígono');
+      
+      if (polygonName) {
+        const coordinates = layer.getLatLngs()[0].map(latlng => [latlng.lat, latlng.lng]);
+        const newLayer = createPolygonLayer(coordinates, { name: polygonName });
+        drawnItems.addLayer(newLayer);
+        saveToServer();
+      }
+      
+      // No es necesario remover la capa porque el control de dibujo ya lo maneja
+    }
+  });
 
   map.on("zoomend", updateLabelsVisibility);
   map.on("moveend", updateLabelsVisibility);
