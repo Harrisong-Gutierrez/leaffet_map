@@ -20,9 +20,21 @@ const CONFIG = {
 };
 
 const DISTRICT_COLORS = [
-  "#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF",
-  "#00FFFF", "#FF8000", "#8000FF", "#00FF80", "#FF0080",
-  "#80FF00", "#0080FF", "#FF8040", "#40FF80", "#8040FF"
+  "#FF0000",
+  "#00FF00",
+  "#0000FF",
+  "#FFFF00",
+  "#FF00FF",
+  "#00FFFF",
+  "#FF8000",
+  "#8000FF",
+  "#00FF80",
+  "#FF0080",
+  "#80FF00",
+  "#0080FF",
+  "#FF8040",
+  "#40FF80",
+  "#8040FF",
 ];
 
 const BARRIO_COLOR = "#97009c";
@@ -38,10 +50,15 @@ function getDistrictColor(districtName) {
 }
 
 function generateUUID() {
-  return crypto?.randomUUID?.() || 
-    ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
-      (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
-    );
+  return (
+    crypto?.randomUUID?.() ||
+    ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c) =>
+      (
+        c ^
+        (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))
+      ).toString(16)
+    )
+  );
 }
 
 function debounce(func, wait) {
@@ -54,8 +71,11 @@ function debounce(func, wait) {
 
 function getPolygonTypeFromProperties(properties) {
   const name = properties?.name || "";
-  
-  if (name.toLowerCase().includes("distrito") || /^distrito\s*\d+/i.test(name)) {
+
+  if (
+    name.toLowerCase().includes("distrito") ||
+    /^distrito\s*\d+/i.test(name)
+  ) {
     return "distrito";
   }
   return "barrio";
@@ -63,8 +83,11 @@ function getPolygonTypeFromProperties(properties) {
 
 function getPolygonTypeFromLayer(layer) {
   const name = layer.properties?.name || "";
-  
-  if (name.toLowerCase().includes("distrito") || /^distrito\s*\d+/i.test(name)) {
+
+  if (
+    name.toLowerCase().includes("distrito") ||
+    /^distrito\s*\d+/i.test(name)
+  ) {
     return "distrito";
   }
 
@@ -81,7 +104,8 @@ function getPolygonTypeFromLayer(layer) {
 
 function createPolygonLayer(coordinates, properties = {}) {
   const type = getPolygonTypeFromProperties(properties);
-  const color = type === "distrito" ? getDistrictColor(properties.name) : BARRIO_COLOR;
+  const color =
+    type === "distrito" ? getDistrictColor(properties.name) : BARRIO_COLOR;
 
   const layer = L.polygon(coordinates, {
     ...CONFIG.polygonStyle,
@@ -125,9 +149,9 @@ function convertToGeoJSON(polygons) {
     name: "barrios_managua",
     crs: {
       type: "name",
-      properties: { name: "urn:ogc:def:crs:OGC:1.3:CRS84" }
+      properties: { name: "urn:ogc:def:crs:OGC:1.3:CRS84" },
     },
-    features: polygons.map(polygon => ({
+    features: polygons.map((polygon) => ({
       type: "Feature",
       properties: {
         id: polygon.id,
@@ -139,7 +163,7 @@ function convertToGeoJSON(polygons) {
       },
       geometry: {
         type: "Polygon",
-        coordinates: [polygon.coordinates.map(coord => [coord[1], coord[0]])],
+        coordinates: [polygon.coordinates.map((coord) => [coord[1], coord[0]])],
       },
     })),
   };
@@ -150,7 +174,11 @@ function processGeoJSONFeature(feature, polygons) {
   const properties = feature.properties || {};
 
   const name = properties.N_Comun || properties.name || "Unnamed Polygon";
-  const id = properties.id || properties.ID_UNICO || properties.id_unico_1 || generateUUID();
+  const id =
+    properties.id ||
+    properties.ID_UNICO ||
+    properties.id_unico_1 ||
+    generateUUID();
   const type = getPolygonTypeFromProperties(properties);
   const color = type === "distrito" ? getDistrictColor(name) : BARRIO_COLOR;
 
@@ -158,16 +186,16 @@ function processGeoJSONFeature(feature, polygons) {
     id: id,
     name: name,
     color: color,
-    coordinates: coords.map(coord => [coord[1], coord[0]]),
+    coordinates: coords.map((coord) => [coord[1], coord[0]]),
   });
 
   if (geometry.type === "Polygon") {
-    geometry.coordinates.forEach(polygonCoords => {
+    geometry.coordinates.forEach((polygonCoords) => {
       polygons.push(processCoordinates(polygonCoords));
     });
   } else if (geometry.type === "MultiPolygon") {
-    geometry.coordinates.forEach(multiPolygon => {
-      multiPolygon.forEach(polygonCoords => {
+    geometry.coordinates.forEach((multiPolygon) => {
+      multiPolygon.forEach((polygonCoords) => {
         polygons.push(processCoordinates(polygonCoords));
       });
     });
@@ -178,9 +206,10 @@ function convertFromGeoJSON(geoJSON) {
   if (!geoJSON) return [];
 
   const polygons = [];
-  const features = geoJSON.type === "FeatureCollection" ? geoJSON.features : [geoJSON];
+  const features =
+    geoJSON.type === "FeatureCollection" ? geoJSON.features : [geoJSON];
 
-  features.forEach(feature => processGeoJSONFeature(feature, polygons));
+  features.forEach((feature) => processGeoJSONFeature(feature, polygons));
   return polygons;
 }
 
@@ -188,14 +217,16 @@ function extractPolygonData(layer) {
   return {
     id: layer.properties?.id || generateUUID(),
     name: layer.properties?.name || "Polygon " + layer._leaflet_id,
-    coordinates: layer.getLatLngs()[0].map(latlng => [latlng.lat, latlng.lng]),
+    coordinates: layer
+      .getLatLngs()[0]
+      .map((latlng) => [latlng.lat, latlng.lng]),
     color: layer.properties?.color || layer.options.fillColor,
   };
 }
 
 window.saveToServer = async function () {
   const polygons = [];
-  drawnItems.eachLayer(layer => {
+  drawnItems.eachLayer((layer) => {
     if (layer instanceof L.Polygon) {
       polygons.push(extractPolygonData(layer));
     }
@@ -225,18 +256,21 @@ window.loadFromServer = async function () {
     const polygons = convertFromGeoJSON(geoJSONData);
     const existingIds = new Set();
 
-    drawnItems.eachLayer(layer => {
+    drawnItems.eachLayer((layer) => {
       if (layer.properties?.id) existingIds.add(layer.properties.id);
     });
 
-    polygons.forEach(polygon => {
+    polygons.forEach((polygon) => {
       if (!existingIds.has(polygon.id)) {
         try {
           const coordinates = [...polygon.coordinates];
           const firstCoord = coordinates[0];
           const lastCoord = coordinates[coordinates.length - 1];
 
-          if (firstCoord[0] !== lastCoord[0] || firstCoord[1] !== lastCoord[1]) {
+          if (
+            firstCoord[0] !== lastCoord[0] ||
+            firstCoord[1] !== lastCoord[1]
+          ) {
             coordinates.push([firstCoord[0], firstCoord[1]]);
           }
 
@@ -257,7 +291,7 @@ window.loadFromServer = async function () {
 
 const updateLabelsVisibility = debounce(function () {
   const currentZoom = map.getZoom();
-  drawnItems.eachLayer(layer => {
+  drawnItems.eachLayer((layer) => {
     updateLayerVisibility(layer, currentZoom);
   });
 }, 150);
